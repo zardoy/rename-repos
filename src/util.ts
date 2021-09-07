@@ -1,8 +1,4 @@
-export const filterWith = <T, K>(
-    sourceArray: T[],
-    filterArray: K[],
-    filterFn: (filterValue: K, sourceValue: T, index: number) => boolean
-): T[] => {
+export const filterWith = <T, K>(sourceArray: T[], filterArray: K[], filterFn: (filterValue: K, sourceValue: T, index: number) => boolean): T[] => {
     return sourceArray.filter((value, index) => filterFn(filterArray[index], value, index))
 }
 
