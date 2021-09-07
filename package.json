@@ -1,28 +1,37 @@
 {
-  "name": "rename-repos",
-  "version": "1.0.0",
-  "main": "index.js",
-  "repository": "https://github.com/zardoy/rename-repos.git",
-  "author": "Vitaly Turovsky <vital2580@icloud.com>",
-  "license": "MIT",
-  "private": true,
-  "devDependencies": {
-    "@types/node": "^15.12.4",
-    "@types/react": "^17.0.11",
-    "@zardoy/tsconfig": "^1.1.0",
-    "typescript": "^4.3.4"
-  },
-  "dependencies": {
-    "@octokit/graphql": "^4.6.4",
-    "commander": "^8.0.0",
-    "git-remote-origin-url": "^3.1.0",
-    "got": "^11.8.2",
-    "ink": "^3.0.8",
-    "ink-inline-progress-bar": "https://github.com/zardoy/ink-progress-bar#build",
-    "ink-select-input": "^4.2.0",
-    "ink-spinner": "^4.0.2",
-    "ink-table": "^3.0.0",
-    "react": "^17.0.2",
-    "read-pkg-up": "^7"
-  }
+    "name": "rename-repos",
+    "version": "1.0.0",
+    "main": "index.js",
+    "repository": "https://github.com/zardoy/rename-repos.git",
+    "author": "Vitaly Turovsky <vital2580@icloud.com>",
+    "license": "MIT",
+    "private": true,
+    "devDependencies": {
+        "@types/node": "^15.14.9",
+        "@types/react": "^17.0.20",
+        "@zardoy/tsconfig": "^1.2.2",
+        "typescript": "^4.4.2"
+    },
+    "dependencies": {
+        "@octokit/graphql": "^4.8.0",
+        "commander": "^8.1.0",
+        "git-remote-origin-url": "^3.1.0",
+        "got": "^11.8.2",
+        "ink": "^3.0.9",
+        "ink-inline-progress-bar": "github:zardoy/ink-progress-bar#build",
+        "ink-select-input": "^4.2.0",
+        "ink-spinner": "^4.0.2",
+        "ink-table": "^3.0.0",
+        "react": "^17.0.2",
+        "read-pkg-up": "^7.0.1"
+    },
+    "prettier": {
+        "semi": false,
+        "singleQuote": true,
+        "proseWrap": "never",
+        "tabWidth": 4,
+        "trailingComma": "all",
+        "arrowParens": "avoid",
+        "printWidth": 150
+    }
 }
