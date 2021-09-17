@@ -6,22 +6,30 @@
     "author": "Vitaly Turovsky <vital2580@icloud.com>",
     "license": "MIT",
     "private": true,
+    "scripts": {
+        "local-test": "ts-node src/index.tsx --cwd .."
+    },
     "devDependencies": {
+        "@types/ini": "^1.3.30",
+        "@types/minimist": "^1.2.2",
         "@types/node": "^15.14.9",
         "@types/react": "^17.0.20",
         "@zardoy/tsconfig": "^1.2.2",
+        "ts-node": "^10.2.1",
         "typescript": "^4.4.2"
     },
     "dependencies": {
         "@octokit/graphql": "^4.8.0",
         "commander": "^8.1.0",
-        "git-remote-origin-url": "^3.1.0",
+        "github-remote-info": "^1.0.3",
         "got": "^11.8.2",
+        "ini": "^2.0.0",
         "ink": "^3.0.9",
         "ink-inline-progress-bar": "github:zardoy/ink-progress-bar#build",
         "ink-select-input": "^4.2.0",
         "ink-spinner": "^4.0.2",
         "ink-table": "^3.0.0",
+        "minimist": "^1.2.5",
         "react": "^17.0.2",
         "read-pkg-up": "^7.0.1"
     },

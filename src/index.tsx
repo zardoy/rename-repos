@@ -1,67 +1,71 @@
-import React, { ComponentProps, useCallback, useEffect, useRef, useState } from 'react'
-import { Box, render, Static, Text } from 'ink'
-import { FC } from 'react'
 import fs from 'fs'
-import path from 'path'
-import { getDirsFromCwd, getGithubRemoteInfo } from './common'
-import SelectInput, { Item } from 'ink-select-input'
-
+import ini from 'ini'
+import { render, Text } from 'ink'
+import SelectInput from 'ink-select-input'
 import InkSpinner from 'ink-spinner'
-
 import InkTable from 'ink-table'
-
-import { program } from 'commander'
+import path, { join } from 'path'
+import React, { FC, useCallback, useEffect, useRef, useState } from 'react'
 import readPackageUp from 'read-pkg-up'
-import { filterWith } from './util'
+import { fromSlug, getDirsFromCwd, getIsRepoMoved, remoteFromDirs, toSlug } from './git'
 import PauseScript from './pause-script'
+import { filterWith } from './util'
+import minimist from 'minimist'
+import { getGithubRemoteInfo, RepoInfo } from 'github-remote-info'
+import { graphql } from '@octokit/graphql'
 
 // thats how CLI should look like (from UX point of view, not DX)
 
-program.version(readPackageUp.sync()!.packageJson.version)
+// program.version(readPackageUp.sync()!.packageJson.version)
 
-program
-    .option('-d, --dir <path>', 'Working directory for scripts', process.cwd())
-    .argument('[script]', 'run without this argument to see possible script names')
+// program
+//     .option('-d, --dir <path>', 'Working directory for scripts', process.cwd())
+//     .argument('[script]', 'run without this argument to see possible script names')
 
 // todo-low (needs testing) add link for dirs support
 
-program.parse()
+// program.parse()
 
-const cwd: string = program.opts().dir
+// const cwd: string = program.opts().dir
+const args = minimist(process.argv.slice(2))
+
+if (args.cwd) process.chdir(path.join(process.cwd(), args.cwd))
+
+const cwd = process.cwd()
 
 interface GetOutputProps {
     conrimActionCallback: () => Promise<void>
     setTempOutput: (component: JSX.Element | null) => void
 }
 
-const scripts = {
+interface Command {
+    label: string
+    getOutput: (helpers: GetOutputProps, parsedFlags: Record<string, any>) => Promise<JSX.Element>
+}
+const makeCommands = <T extends string>(commands: Record<T, Command>) => commands
+
+const commands = makeCommands({
     'all-remote-repos': {
         label: 'Show GitHub info for all repos (offline, extracts origin)',
         getOutput: async () => {
             const { git: gitDirs } = await getDirsFromCwd(cwd)
+            const dirsInfo = await remoteFromDirs(gitDirs)
 
-            const dirsInfo = await Promise.all(
-                gitDirs.map(dir => {
-                    const repoPath = path.join(cwd, dir)
-                    return getGithubRemoteInfo(repoPath)
-                }),
-            )
-
+            type RepoSlug = string
             type Groups = {
                 [user: string]: {
-                    [dir: string]: string
+                    [dir: string]: RepoSlug
                 }
             }
 
-            const groupedRepos: Groups = dirsInfo
-                .map((info, index) => info && [info, gitDirs[index]])
+            const groupedRepos = dirsInfo
+                .map((info, index) => (info && [info, gitDirs[index]]) as [RepoInfo, string])
                 .filter(a => a)
-                //@ts-ignore
-                .reduce((obj, [{ owner, name }, dirName]: [Record<'owner' | 'name', string>, string]) => {
+                .reduce((obj, [{ owner, name }, dirName]) => {
                     if (!obj[owner]) obj[owner] = {}
                     obj[owner][dirName] = name
                     return obj
-                }, {} as Groups) as unknown as Groups
+                }, {} as Groups)
 
             return (
                 <>
@@ -88,17 +92,9 @@ const scripts = {
     },
     'rename-repos': {
         label: 'Rename repos',
-        getOutput: async ({ conrimActionCallback, setTempOutput }: GetOutputProps) => {
-            // todo allow custom templates
-            const repoNameTemplate = '%owner%_%repo%'
+        getOutput: async ({ conrimActionCallback, setTempOutput }, { repoNameTemplate = '%owner%_%repo%' }) => {
             const { git: gitDirs } = await getDirsFromCwd(cwd)
-
-            const dirsInfo = await Promise.all(
-                gitDirs.map(dir => {
-                    const repoPath = path.join(cwd, dir)
-                    return getGithubRemoteInfo(repoPath)
-                }),
-            )
+            const dirsInfo = await remoteFromDirs(gitDirs)
 
             // destination dir name - original dir name
             const dirsNameMap = new Map<string, string>()
@@ -166,7 +162,7 @@ const scripts = {
     'non-remote-repos': {
         label: 'Show non remote repos',
         getOutput: async () => {
-            const gitDirs = (await getDirsFromCwd(cwd)).git
+            const { git: gitDirs } = await getDirsFromCwd(cwd)
 
             const nonRemoteFlags = await Promise.all(
                 gitDirs.map(dir => {
@@ -184,10 +180,74 @@ const scripts = {
             )
         },
     },
-    // "normalize-origin-url": {
+    // flags: --personalToken <string> optional: --updatePackageJson=false --no-preview
+    'upgrade-name-from-github': {
+        label: 'Fetch current repos owner/name from GitHub API using your personal token',
+        async getOutput({ conrimActionCallback, setTempOutput }, { personalToken, preview = true, updatePackageJson }) {
+            // PUPJR = Possible Update of Package.Json's Repository
+            if (!personalToken) throw new TypeError('--personalToken flag is required')
+            const { git: gitDirs } = await getDirsFromCwd(cwd)
+            // TODO fix ! type
+            const repos = (await remoteFromDirs(gitDirs)).map((info, index) => (info ? { dir: gitDirs[index], info } : undefined!)).filter(a => a)
 
-    // }
-} as const
+            const gql = graphql.defaults({
+                headers: {
+                    authorization: `token ${personalToken}`,
+                },
+            })
+
+            const newRepoInfo = await getIsRepoMoved(
+                gql,
+                repos.map(r => r.info),
+            )
+            const movedRepos = newRepoInfo
+                .map((repo, index) =>
+                    repo && repo.moved === true
+                        ? {
+                              oldSlug: toSlug(repos[index].info),
+                              dir: repos[index].dir,
+                              newSlug: repo.newSlug,
+                          }
+                        : undefined!,
+                )
+                .filter(a => a)
+
+            setTempOutput(
+                <>
+                    {/* TODO use pick */}
+                    <InkTable data={movedRepos.map(({ oldSlug, newSlug }) => ({ oldSlug, newSlug }))} />
+                    <Text>This will just replace origin url</Text>
+                </>,
+            )
+
+            await conrimActionCallback()
+
+            for (const repo of movedRepos) {
+                const gitConfigPath = join(process.cwd(), repo.dir, '.git/config')
+                const configParsed = ini.decode(await fs.promises.readFile(gitConfigPath, 'utf-8'))
+
+                if (configParsed['remote "origin"'].url.startsWith('ssh:')) throw new Error('ssh protocol is not supported')
+
+                const { newSlug } = repo
+                const [oldParsedSlug, newParsedSlug] = [fromSlug(repo.oldSlug), fromSlug(newSlug)]
+                configParsed['remote "origin"'].url = `https://github.com/${newSlug}.git`
+
+                await fs.promises.writeFile(gitConfigPath, ini.encode(configParsed), 'utf-8')
+
+                let newName: string | undefined
+                if (repo.dir === oldParsedSlug.name) {
+                    newName = newParsedSlug.name
+                } else if (repo.dir === `${oldParsedSlug.owner}_${oldParsedSlug.name}`) {
+                    // TODO support custom templates
+                    newName = `${newParsedSlug.owner}_${newParsedSlug.name}`
+                }
+                if (newName) await fs.promises.rename(join(process.cwd(), repo.dir), join(process.cwd(), newName))
+            }
+
+            return <Text>Done with {movedRepos.length} repos</Text>
+        },
+    },
+})
 
 const NoScript: FC = () => {
     const [selectedScript, setSelectedScript] = React.useState(null as string | null)
@@ -197,7 +257,10 @@ const NoScript: FC = () => {
     return !selectedScript ? (
         <>
             <Text>Select script to run:</Text>
-            <SelectInput items={Object.entries(scripts).map(([value, { label }]) => ({ label: `${label} – ${value}`, value }))} onSelect={onSelect} />
+            <SelectInput
+                items={Object.entries(commands).map(([value, { label }]) => ({ label: `${label} – ${value}`, value }))}
+                onSelect={onSelect}
+            />
         </>
     ) : (
         <RunScript script={selectedScript} />
@@ -211,18 +274,21 @@ const RunScript: FC<{ script: string }> = ({ script: scriptName }) => {
     const [tempOutput, setTempOutput] = useState<JSX.Element | null>(null)
 
     useEffect(() => {
-        const script = scripts[scriptName]
+        const script: Command = commands[scriptName]
         if ('getOutput' in script) {
             script
-                .getOutput({
-                    conrimActionCallback: () => {
-                        return new Promise<void>(resolve => {
-                            setConfirmCallback(true)
-                            confirmCallbackRef.current = resolve
-                        })
+                .getOutput(
+                    {
+                        conrimActionCallback() {
+                            return new Promise<void>(resolve => {
+                                setConfirmCallback(true)
+                                confirmCallbackRef.current = resolve
+                            })
+                        },
+                        setTempOutput,
                     },
-                    setTempOutput,
-                } as GetOutputProps)
+                    args,
+                )
                 .then(output => setOutput(output))
         } else {
             throw new Error(`Script has no runner`)
@@ -249,6 +315,4 @@ const RunScript: FC<{ script: string }> = ({ script: scriptName }) => {
     )
 }
 
-const scriptArg = program.args[0]
-
-render(scriptArg ? <RunScript script={scriptArg} /> : <NoScript />)
+render(args._?.length ? <RunScript script={args._[0]} /> : <NoScript />)
