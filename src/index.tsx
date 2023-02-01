@@ -180,19 +180,18 @@ const commands = makeCommands({
             )
         },
     },
-    // flags: --personalToken <string> optional: --updatePackageJson=false --no-preview
-    'upgrade-name-from-github': {
-        label: 'Fetch current repos owner/name from GitHub API using your personal token',
-        async getOutput({ conrimActionCallback, setTempOutput }, { personalToken, preview = true, updatePackageJson }) {
+    // flags: optional: --updatePackageJson=false --no-preview
+    'update-names-from-github': {
+        label: 'Compare and update origins & folder names from GitHub API using your personal token',
+        async getOutput({ conrimActionCallback, setTempOutput }, { preview = true, updatePackageJson }) {
             // PUPJR = Possible Update of Package.Json's Repository
-            if (!personalToken) throw new TypeError('--personalToken flag is required')
+            if (!process.env.GITHUB_TOKEN) throw new Error('GITHUB_TOKEN env variable is required for graphql API')
             const { git: gitDirs } = await getDirsFromCwd(cwd)
-            // TODO fix ! type
             const repos = (await remoteFromDirs(gitDirs)).map((info, index) => (info ? { dir: gitDirs[index], info } : undefined!)).filter(a => a)
 
             const gql = graphql.defaults({
                 headers: {
-                    authorization: `token ${personalToken}`,
+                    authorization: `token ${process.env.GITHUB_TOKEN}`,
                 },
             })
 

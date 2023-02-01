@@ -27,7 +27,9 @@ export const remoteFromDirs = async (gitDirs: string[]) => {
     return await Promise.all(
         gitDirs.map(dir => {
             const repoPath = path.join(process.cwd(), dir)
-            return getGithubRemoteInfo(repoPath)
+            return getGithubRemoteInfo(repoPath).catch(error => {
+                console.warn('[warning] Skipped repo:', error)
+            })
         }),
     )
 }
